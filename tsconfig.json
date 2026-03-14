@@ -8,7 +8,7 @@
         // Environment Settings
         // See also https://aka.ms/tsconfig/module
         "module": "NodeNext",
-        "target": "ES2022",
+        "target": "ESNext",
         "types": ["node"],
         "moduleResolution": "NodeNext",
         // For nodejs:
@@ -42,5 +42,7 @@
         "moduleDetection": "force",
         "skipLibCheck": true,
         "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "forceConsistentCasingInFileNames": true
     }
 }
