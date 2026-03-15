@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { CreateUserUseCase } from './create-user.usecase.js';
 import { User, type CreateUserParams } from './user.entity.js';
+import type { UserRepository } from './user.repository.js';
 
 // We need a fake/mock repository for the usecase to talk to
-class MockUserRepository {
+class MockUserRepository implements UserRepository {
     public savedUsers: User[] = [];
 
     async save(user: User): Promise<void> {
@@ -17,7 +18,7 @@ describe('CreateUserUseCase', () => {
         const mockRepo = new MockUserRepository();
         const useCase = new CreateUserUseCase(mockRepo);
 
-        const params = {
+        const params: CreateUserParams = {
             id: '1',
             username: 'username',
             passwordHash: 'passwordHash',
