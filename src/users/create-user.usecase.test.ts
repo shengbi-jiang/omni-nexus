@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { CreateUserUseCase } from './create-user.usecase.js';
 import { User, type CreateUserParams } from './user.entity.js';
 import type { UserRepository } from './user.repository.js';
@@ -135,8 +135,8 @@ describe('CreateUserUseCase', () => {
 
         // The usecase will pass pre-checks if we mock findByEmail to return null,
         // but save() should still catch it.
-        mockRepo.findByEmail = async () => null;
-        mockRepo.findByUsername = async () => null;
+        vi.spyOn(mockRepo, 'findByEmail').mockResolvedValue(null);
+        vi.spyOn(mockRepo, 'findByUsername').mockResolvedValue(null);
 
         await expect(useCase.execute(newParams)).rejects.toThrow(
             `Email 'user1@email.com' is already taken.`
