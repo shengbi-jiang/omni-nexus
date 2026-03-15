@@ -74,6 +74,9 @@ describe('CreateUserUseCase', () => {
         // Pre-fill the repository
         await useCase.execute(params);
 
+        // Spy on save AFTER pre-fill so we only track the duplicate attempt
+        const saveSpy = vi.spyOn(mockRepo, 'save');
+
         const duplicateParams: CreateUserParams = {
             id: '2',
             username: 'newUser',
@@ -85,6 +88,7 @@ describe('CreateUserUseCase', () => {
             DomainError
         );
         expect(mockRepo.savedUsers.length).toBe(1);
+        expect(saveSpy).not.toHaveBeenCalled();
     });
 
     it('should throw DomainError if username is already taken', async () => {
@@ -101,6 +105,9 @@ describe('CreateUserUseCase', () => {
         // Pre-fill
         await useCase.execute(params);
 
+        // Spy on save AFTER pre-fill so we only track the duplicate attempt
+        const saveSpy = vi.spyOn(mockRepo, 'save');
+
         const duplicateParams: CreateUserParams = {
             id: '2',
             username: 'duplicateUser',
@@ -112,6 +119,7 @@ describe('CreateUserUseCase', () => {
             DomainError
         );
         expect(mockRepo.savedUsers.length).toBe(1);
+        expect(saveSpy).not.toHaveBeenCalled();
     });
 
     it('should throw DomainError from repository save if pre-checks were bypassed (race condition simulation)', async () => {
