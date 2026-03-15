@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
 import { CreateUserUseCase } from './create-user.usecase.js';
 import { User, type CreateUserParams } from './user.entity.js';
 import type { UserRepository } from './user.repository.js';
@@ -30,6 +30,10 @@ class MockUserRepository implements UserRepository {
 }
 
 describe('CreateUserUseCase', () => {
+    beforeEach(() => {
+        vi.resetAllMocks();
+    });
+
     it('should create and save a new user', async () => {
         // 1. Arrange: Setup the dependencies
         const mockRepo = new MockUserRepository();
