@@ -9,21 +9,23 @@ class MockUserRepository implements UserRepository {
     public savedUsers: User[] = [];
 
     async save(user: User): Promise<void> {
-        if (this.savedUsers.some(u => u.email === user.email)) {
+        if (this.savedUsers.some((u) => u.email === user.email)) {
             throw new DomainError(`Email '${user.email}' is already taken.`);
         }
-        if (this.savedUsers.some(u => u.username === user.username)) {
-            throw new DomainError(`Username '${user.username}' is already taken.`);
+        if (this.savedUsers.some((u) => u.username === user.username)) {
+            throw new DomainError(
+                `Username '${user.username}' is already taken.`
+            );
         }
         this.savedUsers.push(user);
     }
 
     async findByEmail(email: string): Promise<User | null> {
-        return this.savedUsers.find(u => u.email === email) || null;
+        return this.savedUsers.find((u) => u.email === email) || null;
     }
 
     async findByUsername(username: string): Promise<User | null> {
-        return this.savedUsers.find(u => u.username === username) || null;
+        return this.savedUsers.find((u) => u.username === username) || null;
     }
 }
 
@@ -75,7 +77,10 @@ describe('CreateUserUseCase', () => {
             email: 'duplicate@email.com',
         };
 
-        await expect(useCase.execute(duplicateParams)).rejects.toThrow(DomainError);
+        await expect(useCase.execute(duplicateParams)).rejects.toThrow(
+            DomainError
+        );
+        expect(mockRepo.savedUsers.length).toBe(1);
     });
 
     it('should throw DomainError if username is already taken', async () => {
@@ -99,7 +104,10 @@ describe('CreateUserUseCase', () => {
             email: 'second@email.com',
         };
 
-        await expect(useCase.execute(duplicateParams)).rejects.toThrow(DomainError);
+        await expect(useCase.execute(duplicateParams)).rejects.toThrow(
+            DomainError
+        );
+        expect(mockRepo.savedUsers.length).toBe(1);
     });
 
     it('should throw DomainError from repository save if pre-checks were bypassed (race condition simulation)', async () => {
@@ -125,11 +133,14 @@ describe('CreateUserUseCase', () => {
             email: 'user1@email.com', // Duplicate email
         };
 
-        // The usecase will pass pre-checks if we mock findByEmail to return null, 
+        // The usecase will pass pre-checks if we mock findByEmail to return null,
         // but save() should still catch it.
         mockRepo.findByEmail = async () => null;
         mockRepo.findByUsername = async () => null;
 
-        await expect(useCase.execute(newParams)).rejects.toThrow(`Email 'user1@email.com' is already taken.`);
+        await expect(useCase.execute(newParams)).rejects.toThrow(
+            `Email 'user1@email.com' is already taken.`
+        );
+        expect(mockRepo.savedUsers.length).toBe(1);
     });
 });
