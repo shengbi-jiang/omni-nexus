@@ -9,6 +9,12 @@ class MockUserRepository implements UserRepository {
     public savedUsers: User[] = [];
 
     async save(user: User): Promise<void> {
+        if (this.savedUsers.some(u => u.email === user.email)) {
+            throw new DomainError(`Email '${user.email}' is already taken.`);
+        }
+        if (this.savedUsers.some(u => u.username === user.username)) {
+            throw new DomainError(`Username '${user.username}' is already taken.`);
+        }
         this.savedUsers.push(user);
     }
 
@@ -94,5 +100,36 @@ describe('CreateUserUseCase', () => {
         };
 
         await expect(useCase.execute(duplicateParams)).rejects.toThrow(DomainError);
+    });
+
+    it('should throw DomainError from repository save if pre-checks were bypassed (race condition simulation)', async () => {
+        const mockRepo = new MockUserRepository();
+        const useCase = new CreateUserUseCase(mockRepo);
+
+        const params: CreateUserParams = {
+            id: '1',
+            username: 'user1',
+            passwordHash: 'hash',
+            email: 'user1@email.com',
+        };
+
+        // Directly push to repository to simulate a concurrent save that happened after our pre-checks
+        // but before our save.
+        const existingUser = new User(params);
+        mockRepo.savedUsers.push(existingUser);
+
+        const newParams: CreateUserParams = {
+            id: '2',
+            username: 'user2',
+            passwordHash: 'hash',
+            email: 'user1@email.com', // Duplicate email
+        };
+
+        // The usecase will pass pre-checks if we mock findByEmail to return null, 
+        // but save() should still catch it.
+        mockRepo.findByEmail = async () => null;
+        mockRepo.findByUsername = async () => null;
+
+        await expect(useCase.execute(newParams)).rejects.toThrow(`Email 'user1@email.com' is already taken.`);
     });
 });
