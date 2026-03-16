@@ -1,22 +1,49 @@
-import { User, type CreateUserParams } from './user.entity.js';
+import { User } from './user.entity.js';
 import { type UserRepository } from './user.repository.js';
+import { type PasswordHasher } from './password-hasher.js';
 import { DomainError } from '../common/errors/domain.error.js';
 
+export interface RegisterUserInput {
+    id: string;
+    username: string;
+    email: string;
+    password: string; // plain-text — will be hashed before the entity is created
+}
+
 export class CreateUserUseCase {
-    public constructor(private readonly userRepository: UserRepository) {}
+    public constructor(
+        private readonly userRepository: UserRepository,
+        private readonly passwordHasher: PasswordHasher
+    ) {}
 
-    public async execute(params: CreateUserParams): Promise<User> {
-        const existingEmail = await this.userRepository.findByEmail(params.email);
+    public async execute(input: RegisterUserInput): Promise<User> {
+        const existingEmail = await this.userRepository.findByEmail(
+            input.email
+        );
         if (existingEmail) {
-            throw new DomainError(`Email '${params.email}' is already taken.`);
+            throw new DomainError(`Email '${input.email}' is already taken.`);
         }
 
-        const existingUsername = await this.userRepository.findByUsername(params.username);
+        const existingUsername = await this.userRepository.findByUsername(
+            input.username
+        );
         if (existingUsername) {
-            throw new DomainError(`Username '${params.username}' is already taken.`);
+            throw new DomainError(
+                `Username '${input.username}' is already taken.`
+            );
         }
 
-        const user = new User(params);
+        // Hash only after the fast-fail pre-checks pass — no point doing
+        // expensive crypto if we're going to throw anyway.
+        const passwordHash = await this.passwordHasher.hash(input.password);
+
+        const user = new User({
+            id: input.id,
+            username: input.username,
+            email: input.email,
+            passwordHash,
+        });
+
         await this.userRepository.save(user);
         return user;
     }
