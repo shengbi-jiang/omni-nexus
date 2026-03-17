@@ -17,16 +17,15 @@ export class CreateUserUseCase {
     ) {}
 
     public async execute(input: RegisterUserInput): Promise<User> {
-        const existingEmail = await this.userRepository.findByEmail(
-            input.email
-        );
+        const [existingEmail, existingUsername] = await Promise.all([
+            this.userRepository.findByEmail(input.email),
+            this.userRepository.findByUsername(input.username),
+        ]);
+
         if (existingEmail) {
             throw new DomainError(`Email '${input.email}' is already taken.`);
         }
 
-        const existingUsername = await this.userRepository.findByUsername(
-            input.username
-        );
         if (existingUsername) {
             throw new DomainError(
                 `Username '${input.username}' is already taken.`
