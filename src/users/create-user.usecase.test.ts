@@ -1,10 +1,17 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest';
-import { CreateUserUseCase } from './create-user.usecase.js';
-import { User, type CreateUserParams } from './user.entity.js';
+import {
+    CreateUserUseCase,
+    type RegisterUserInput,
+} from './create-user.usecase.js';
+import { User } from './user.entity.js';
 import type { UserRepository } from './user.repository.js';
+import type { PasswordHasher } from './password-hasher.js';
 import { DomainError } from '../common/errors/domain.error.js';
 
-// We need a fake/mock repository for the usecase to talk to
+// ---------------------------------------------------------------------------
+// Test doubles
+// ---------------------------------------------------------------------------
+
 class MockUserRepository implements UserRepository {
     public savedUsers: User[] = [];
 
@@ -29,30 +36,43 @@ class MockUserRepository implements UserRepository {
     }
 }
 
+// A thin helper so every test gets a fresh, consistent mock hasher.
+const makeMockHasher = (resolvedHash = 'hashed_password'): PasswordHasher => ({
+    hash: vi.fn().mockResolvedValue(resolvedHash),
+});
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
 describe('CreateUserUseCase', () => {
     beforeEach(() => {
         vi.resetAllMocks();
     });
 
-    it('should create and save a new user', async () => {
-        // 1. Arrange: Setup the dependencies
+    it('should hash the plain password and save the user', async () => {
         const mockRepo = new MockUserRepository();
-        const useCase = new CreateUserUseCase(mockRepo);
+        const mockHasher = makeMockHasher('super_hashed');
+        const useCase = new CreateUserUseCase(mockRepo, mockHasher);
 
-        const params: CreateUserParams = {
+        const input: RegisterUserInput = {
             id: '1',
             username: 'username',
-            passwordHash: 'passwordHash',
+            password: 'plainPassword',
             email: 'test@email.com',
         };
 
-        // 2. Act: Execute the workflow
-        const createdUser = await useCase.execute(params);
+        const createdUser = await useCase.execute(input);
 
-        // 3. Assert: Verify side-effects (saved to DB)
+        // Verify the hasher was called with the plain-text password
+        expect(mockHasher.hash).toHaveBeenCalledWith('plainPassword');
+        expect(mockHasher.hash).toHaveBeenCalledTimes(1);
+
+        // Verify the entity stores the hash, not the plain password
+        expect(createdUser.passwordHash).toBe('super_hashed');
+
+        // Verify side-effects and returned entity
         expect(mockRepo.savedUsers.length).toBe(1);
-
-        // 4. Assert: Verify the returned entity
         expect(createdUser).toBeDefined();
         expect(createdUser.id).toBe('1');
         expect(createdUser.username).toBe('username');
@@ -62,29 +82,30 @@ describe('CreateUserUseCase', () => {
 
     it('should throw DomainError if email is already taken', async () => {
         const mockRepo = new MockUserRepository();
-        const useCase = new CreateUserUseCase(mockRepo);
+        const mockHasher = makeMockHasher();
+        const useCase = new CreateUserUseCase(mockRepo, mockHasher);
 
-        const params: CreateUserParams = {
+        const input: RegisterUserInput = {
             id: '1',
             username: 'originalUser',
-            passwordHash: 'hash',
+            password: 'password123',
             email: 'duplicate@email.com',
         };
 
         // Pre-fill the repository
-        await useCase.execute(params);
+        await useCase.execute(input);
 
         // Spy on save AFTER pre-fill so we only track the duplicate attempt
         const saveSpy = vi.spyOn(mockRepo, 'save');
 
-        const duplicateParams: CreateUserParams = {
+        const duplicateInput: RegisterUserInput = {
             id: '2',
             username: 'newUser',
-            passwordHash: 'hash2',
+            password: 'password456',
             email: 'duplicate@email.com',
         };
 
-        await expect(useCase.execute(duplicateParams)).rejects.toThrow(
+        await expect(useCase.execute(duplicateInput)).rejects.toThrow(
             DomainError
         );
         expect(mockRepo.savedUsers.length).toBe(1);
@@ -93,29 +114,30 @@ describe('CreateUserUseCase', () => {
 
     it('should throw DomainError if username is already taken', async () => {
         const mockRepo = new MockUserRepository();
-        const useCase = new CreateUserUseCase(mockRepo);
+        const mockHasher = makeMockHasher();
+        const useCase = new CreateUserUseCase(mockRepo, mockHasher);
 
-        const params: CreateUserParams = {
+        const input: RegisterUserInput = {
             id: '1',
             username: 'duplicateUser',
-            passwordHash: 'hash',
+            password: 'password123',
             email: 'first@email.com',
         };
 
         // Pre-fill
-        await useCase.execute(params);
+        await useCase.execute(input);
 
         // Spy on save AFTER pre-fill so we only track the duplicate attempt
         const saveSpy = vi.spyOn(mockRepo, 'save');
 
-        const duplicateParams: CreateUserParams = {
+        const duplicateInput: RegisterUserInput = {
             id: '2',
             username: 'duplicateUser',
-            passwordHash: 'hash2',
+            password: 'password456',
             email: 'second@email.com',
         };
 
-        await expect(useCase.execute(duplicateParams)).rejects.toThrow(
+        await expect(useCase.execute(duplicateInput)).rejects.toThrow(
             DomainError
         );
         expect(mockRepo.savedUsers.length).toBe(1);
@@ -124,33 +146,31 @@ describe('CreateUserUseCase', () => {
 
     it('should throw DomainError from repository save if pre-checks were bypassed (race condition simulation)', async () => {
         const mockRepo = new MockUserRepository();
-        const useCase = new CreateUserUseCase(mockRepo);
+        const mockHasher = makeMockHasher();
+        const useCase = new CreateUserUseCase(mockRepo, mockHasher);
 
-        const params: CreateUserParams = {
+        // Directly push to repository to simulate a concurrent save that happened
+        // after our pre-checks but before our own save.
+        const existingUser = new User({
             id: '1',
             username: 'user1',
             passwordHash: 'hash',
             email: 'user1@email.com',
-        };
-
-        // Directly push to repository to simulate a concurrent save that happened after our pre-checks
-        // but before our save.
-        const existingUser = new User(params);
+        });
         mockRepo.savedUsers.push(existingUser);
 
-        const newParams: CreateUserParams = {
+        const newInput: RegisterUserInput = {
             id: '2',
             username: 'user2',
-            passwordHash: 'hash',
+            password: 'password',
             email: 'user1@email.com', // Duplicate email
         };
 
-        // The usecase will pass pre-checks if we mock findByEmail to return null,
-        // but save() should still catch it.
+        // Bypass the use case pre-checks to simulate the race
         vi.spyOn(mockRepo, 'findByEmail').mockResolvedValue(null);
         vi.spyOn(mockRepo, 'findByUsername').mockResolvedValue(null);
 
-        await expect(useCase.execute(newParams)).rejects.toThrow(
+        await expect(useCase.execute(newInput)).rejects.toThrow(
             `Email 'user1@email.com' is already taken.`
         );
         expect(mockRepo.savedUsers.length).toBe(1);
