@@ -95,8 +95,9 @@ describe('CreateUserUseCase', () => {
         // Pre-fill the repository
         await useCase.execute(input);
 
-        // Spy on save AFTER pre-fill so we only track the duplicate attempt
+        // Reset call history AFTER pre-fill so assertions below only cover the duplicate attempt
         const saveSpy = vi.spyOn(mockRepo, 'save');
+        vi.mocked(mockHasher.hash).mockClear();
 
         const duplicateInput: RegisterUserInput = {
             id: '2',
@@ -110,6 +111,7 @@ describe('CreateUserUseCase', () => {
         );
         expect(mockRepo.savedUsers.length).toBe(1);
         expect(saveSpy).not.toHaveBeenCalled();
+        expect(mockHasher.hash).not.toHaveBeenCalled();
     });
 
     it('should throw DomainError if username is already taken', async () => {
@@ -127,8 +129,9 @@ describe('CreateUserUseCase', () => {
         // Pre-fill
         await useCase.execute(input);
 
-        // Spy on save AFTER pre-fill so we only track the duplicate attempt
+        // Reset call history AFTER pre-fill so assertions below only cover the duplicate attempt
         const saveSpy = vi.spyOn(mockRepo, 'save');
+        vi.mocked(mockHasher.hash).mockClear();
 
         const duplicateInput: RegisterUserInput = {
             id: '2',
@@ -142,6 +145,7 @@ describe('CreateUserUseCase', () => {
         );
         expect(mockRepo.savedUsers.length).toBe(1);
         expect(saveSpy).not.toHaveBeenCalled();
+        expect(mockHasher.hash).not.toHaveBeenCalled();
     });
 
     it('should throw DomainError from repository save if pre-checks were bypassed (race condition simulation)', async () => {
